@@ -36,6 +36,9 @@ import com.github.tvbox.osc.ui.tv.QRCodeGen;
 import com.github.tvbox.osc.ui.tv.widget.SearchKeyboard;
 import com.github.tvbox.osc.util.FastClickCheckUtil;
 import com.github.tvbox.osc.util.HawkConfig;
+import com.github.tvbox.osc.util.LOG;
+import com.github.tvbox.osc.util.SearchHelper;
+import com.github.tvbox.osc.util.js.JSEngine;
 import com.github.tvbox.osc.viewmodel.SourceViewModel;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
@@ -81,7 +84,7 @@ public class SearchActivity extends BaseActivity {
     private String searchTitle = "";
     private TextView tvSearchCheckboxBtn;
 
-    private HashMap<String, SourceBean> mCheckSourcees = null;
+    private HashMap<String, String> mCheckSources = null;
     private SearchCheckboxDialog mSearchCheckboxDialog = null;
 
     @Override
@@ -93,7 +96,6 @@ public class SearchActivity extends BaseActivity {
     private static Boolean hasKeyBoard;
     @Override
     protected void init() {
-        disableKeyboard(SearchActivity.this);
         initView();
         initViewModel();
         initData();
@@ -178,6 +180,7 @@ public class SearchActivity extends BaseActivity {
                     try {
                         if (searchExecutorService != null) {
                             pauseRunnable = searchExecutorService.shutdownNow();
+                            JSEngine.getInstance().stopAll();
                             searchExecutorService = null;
                         }
                     } catch (Throwable th) {
@@ -209,15 +212,14 @@ public class SearchActivity extends BaseActivity {
                 etSearch.setText("");
             }
         });
-        etSearch.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View v) {
-//                Toast.makeText(mContext,"点击",Toast.LENGTH_SHORT).show();
-                if(!hasKeyBoard)enableKeyboard(SearchActivity.this);
-                openSystemKeyBoard();//再次尝试拉起键盘
-                SearchActivity.this.getWindow().setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_STATE_ALWAYS_VISIBLE);
-            }
-        });
+//        etSearch.setOnClickListener(new View.OnClickListener() {
+//            @Override
+//            public void onClick(View v) {
+//                enableKeyboard(SearchActivity.this);
+//                openSystemKeyBoard();//再次尝试拉起键盘
+//                SearchActivity.this.getWindow().setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_STATE_VISIBLE);
+//            }
+//        });
 
 //        etSearch.setOnFocusChangeListener(tvSearchFocusChangeListener);
         keyboard.setOnSearchKeyListener(new SearchKeyboard.OnSearchKeyListener() {
@@ -249,21 +251,15 @@ public class SearchActivity extends BaseActivity {
         tvSearchCheckboxBtn.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View view) {
-                List<SourceBean> allSourceBean = ApiConfig.get().getSourceBeanList();
-                List<SourceBean> searchAbleSource = new ArrayList<>();
                 if (mSearchCheckboxDialog == null) {
-                    mCheckSourcees = new HashMap<>();
-                }
-                for(SourceBean sourceBean : allSourceBean) {
-                    if (sourceBean.isSearchable()) {
-                        searchAbleSource.add(sourceBean);
-                        if (mSearchCheckboxDialog == null) {
-                            mCheckSourcees.put(sourceBean.getKey(), sourceBean);
+                    List<SourceBean> allSourceBean = ApiConfig.get().getSourceBeanList();
+                    List<SourceBean> searchAbleSource = new ArrayList<>();
+                    for(SourceBean sourceBean : allSourceBean) {
+                        if (sourceBean.isSearchable()) {
+                            searchAbleSource.add(sourceBean);
                         }
                     }
-                }
-                if (mSearchCheckboxDialog == null) {
-                    mSearchCheckboxDialog = new SearchCheckboxDialog(SearchActivity.this, searchAbleSource, mCheckSourcees);
+                    mSearchCheckboxDialog = new SearchCheckboxDialog(SearchActivity.this, searchAbleSource, mCheckSources);
                 }
                 mSearchCheckboxDialog.show();
             }
@@ -278,23 +274,49 @@ public class SearchActivity extends BaseActivity {
      * 拼音联想
      */
     private void loadRec(String key) {
-        OkGo.<String>get("https://s.video.qq.com/smartbox")
-                .params("plat", 2)
-                .params("ver", 0)
-                .params("num", 20)
-                .params("otype", "json")
-                .params("query", key)
+//        OkGo.<String>get("https://s.video.qq.com/smartbox")
+//                .params("plat", 2)
+//                .params("ver", 0)
+//                .params("num", 20)
+//                .params("otype", "json")
+//                .params("query", key)
+//                .execute(new AbsCallback<String>() {
+//                    @Override
+//                    public void onSuccess(Response<String> response) {
+//                        try {
+//                            ArrayList<String> hots = new ArrayList<>();
+//                            String result = response.body();
+//                            JsonObject json = JsonParser.parseString(result.substring(result.indexOf("{"), result.lastIndexOf("}") + 1)).getAsJsonObject();
+//                            JsonArray itemList = json.get("item").getAsJsonArray();
+//                            for (JsonElement ele : itemList) {
+//                                JsonObject obj = (JsonObject) ele;
+//                                hots.add(obj.get("word").getAsString().trim().replaceAll("<|>|《|》|-", "").split(" ")[0]);
+//                            }
+//                            wordAdapter.setNewData(hots);
+//                        } catch (Throwable th) {
+//                            th.printStackTrace();
+//                        }
+//                    }
+//
+//                    @Override
+//                    public String convertResponse(okhttp3.Response response) throws Throwable {
+//                        return response.body().string();
+//                    }
+//                });
+        OkGo.<String>get("https://suggest.video.iqiyi.com/")
+                .params("if", "mobile")
+                .params("key", key)
                 .execute(new AbsCallback<String>() {
                     @Override
                     public void onSuccess(Response<String> response) {
                         try {
                             ArrayList<String> hots = new ArrayList<>();
                             String result = response.body();
-                            JsonObject json = JsonParser.parseString(result.substring(result.indexOf("{"), result.lastIndexOf("}") + 1)).getAsJsonObject();
-                            JsonArray itemList = json.get("item").getAsJsonArray();
+                            JsonObject json = JsonParser.parseString(result).getAsJsonObject();
+                            JsonArray itemList = json.get("data").getAsJsonArray();
                             for (JsonElement ele : itemList) {
                                 JsonObject obj = (JsonObject) ele;
-                                hots.add(obj.get("word").getAsString().trim());
+                                hots.add(obj.get("name").getAsString().trim().replaceAll("<|>|《|》|-", ""));
                             }
                             wordAdapter.setNewData(hots);
                         } catch (Throwable th) {
@@ -307,35 +329,11 @@ public class SearchActivity extends BaseActivity {
                         return response.body().string();
                     }
                 });
-//        OkGo.<String>get("https://suggest.video.iqiyi.com/")
-//                .params("if", "mobile")
-//                .params("key", key)
-//                .execute(new AbsCallback<String>() {
-//                    @Override
-//                    public void onSuccess(Response<String> response) {
-//                        try {
-//                            ArrayList<String> hots = new ArrayList<>();
-//                            String result = response.body();
-//                            JsonObject json = JsonParser.parseString(result).getAsJsonObject();
-//                            JsonArray itemList = json.get("data").getAsJsonArray();
-//                            for (JsonElement ele : itemList) {
-//                                JsonObject obj = (JsonObject) ele;
-//                                hots.add(obj.get("name").getAsString().trim());
-//                            }
-//                        } catch (Throwable th) {
-//                            th.printStackTrace();
-//                        }
-//                    }
-//
-//                    @Override
-//                    public String convertResponse(okhttp3.Response response) throws Throwable {
-//                        return response.body().string();
-//                    }
-//                });
     }
 
     private void initData() {
         refreshQRCode();
+        initCheckedSourcesForSearch();
         Intent intent = getIntent();
         if (intent != null && intent.hasExtra("title")) {
             String title = intent.getStringExtra("title");
@@ -370,6 +368,7 @@ public class SearchActivity extends BaseActivity {
                         return response.body().string();
                     }
                 });
+
     }
 
     private void refreshQRCode() {
@@ -398,6 +397,10 @@ public class SearchActivity extends BaseActivity {
         }
     }
 
+    private void initCheckedSourcesForSearch() {
+        mCheckSources = SearchHelper.getSourcesForSearch();
+    }
+
     private void search(String title) {
         cancel();
         showLoading();
@@ -414,6 +417,7 @@ public class SearchActivity extends BaseActivity {
         try {
             if (searchExecutorService != null) {
                 searchExecutorService.shutdownNow();
+                JSEngine.getInstance().stopAll();
                 searchExecutorService = null;
             }
         } catch (Throwable th) {
@@ -434,7 +438,7 @@ public class SearchActivity extends BaseActivity {
             if (!bean.isSearchable()) {
                 continue;
             }
-            if (mCheckSourcees != null && !mCheckSourcees.containsKey(bean.getKey())) {
+            if (mCheckSources != null && !mCheckSources.containsKey(bean.getKey())) {
                 continue;
             }
             siteKey.add(bean.getKey());
@@ -492,6 +496,7 @@ public class SearchActivity extends BaseActivity {
         try {
             if (searchExecutorService != null) {
                 searchExecutorService.shutdownNow();
+                JSEngine.getInstance().stopAll();
                 searchExecutorService = null;
             }
         } catch (Throwable th) {
@@ -499,18 +504,4 @@ public class SearchActivity extends BaseActivity {
         }
         EventBus.getDefault().unregister(this);
     }
-
-//    @Override
-//    public boolean dispatchKeyEvent(KeyEvent event) {
-//        if (event.getAction() == KeyEvent.ACTION_DOWN) {
-//            int keyCode = event.getKeyCode();
-//            if (keyCode == KeyEvent.KEYCODE_MENU) {
-//                if(!hasKeyBoard)enableKeyboard(SearchActivity.this);
-//                openSystemKeyBoard();//再次尝试拉起键盘
-//                getWindow().setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_STATE_ALWAYS_VISIBLE);
-//            }
-//        } else if (event.getAction() == KeyEvent.ACTION_UP) {
-//        }
-//        return super.dispatchKeyEvent(event);
-//    }
 }
