@@ -284,15 +284,17 @@ public class SourceViewModel extends ViewModel {
                         }
                     });
         }else if (type == 4) {
-            String ext="";
+            String ext= "";
             if (sortData.filterSelect != null && sortData.filterSelect.size() > 0) {
                 try {
-                    LOG.i(new JSONObject(sortData.filterSelect).toString());
-                    ext = Base64.encodeToString(new JSONObject(sortData.filterSelect).toString().getBytes("UTF-8"), Base64.DEFAULT |  Base64.NO_WRAP);
+                    String selectExt = new JSONObject(sortData.filterSelect).toString();
+                    ext = Base64.encodeToString(selectExt.getBytes("UTF-8"), Base64.DEFAULT |  Base64.NO_WRAP);
                     LOG.i(ext);
                 } catch (UnsupportedEncodingException e) {
                     e.printStackTrace();
                 }
+            }else {
+                ext = Base64.encodeToString("{}".getBytes(), Base64.DEFAULT |  Base64.NO_WRAP);
             }
             OkGo.<String>get(homeSourceBean.getApi())
                 .tag(homeSourceBean.getApi())
@@ -867,6 +869,45 @@ public class SourceViewModel extends ViewModel {
 //                                    if (ss.length >= 2) {
 //                                        infoBeanList.add(new Movie.Video.UrlBean.UrlInfo.InfoBean(ss[0], ss[1]));
 //                                    }
+                                    if (ss.length > 0) {
+                                        if (ss.length >= 2) {
+                                            infoBeanList.add(new Movie.Video.UrlBean.UrlInfo.InfoBean(ss[0], ss[1]));
+                                        } else {
+                                            infoBeanList.add(new Movie.Video.UrlBean.UrlInfo.InfoBean((infoBeanList.size() + 1) + "", ss[0]));
+                                        }
+                                    }
+                                }
+                            }
+                            urlInfo.beanList = infoBeanList;
+                            detailResult.postValue(data);
+                        }
+
+                        @Override
+                        public void play(String url) {
+
+                        }
+                    });
+                }
+                if (urlInfo != null && urlInfo.beanList.size() == 1 && Thunder.isNetworkDownloadTask(urlInfo.beanList.get(0).url)) {
+                    Thunder.startTask(App.getInstance(), urlInfo.beanList.get(0).url, new Thunder.ThunderCallback() {
+                        @Override
+                        public void status(int code, String info) {
+                            if (code >= 0) {
+                                LOG.i(info);
+                            } else {
+                                urlInfo.beanList.get(0).name = info;
+                                detailResult.postValue(data);
+                            }
+                        }
+
+                        @Override
+                        public void list(String playList) {
+                            urlInfo.urls = playList;
+                            String[] str = playList.split("#");
+                            List<Movie.Video.UrlBean.UrlInfo.InfoBean> infoBeanList = new ArrayList<>();
+                            for (String s : str) {
+                                if (s.contains("$")) {
+                                    String[] ss = s.split("\\$");
                                     if (ss.length > 0) {
                                         if (ss.length >= 2) {
                                             infoBeanList.add(new Movie.Video.UrlBean.UrlInfo.InfoBean(ss[0], ss[1]));
